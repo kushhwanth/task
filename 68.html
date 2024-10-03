@@ -1,8 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Management App</title>
     <style>
         body {
@@ -72,106 +69,168 @@
 <body>
     <h1>Task Manager</h1>
     <div class="container">
-        <label for="user-name">Enter your name: </label>
-        <input type="text" id="user-name" placeholder="Enter your name" />
-        <h2>Welcome, <span id="display-name">User</span>!</h2>
+        <form id="name-form">
+            <label for="name">Enter your name: </label>
+            <input type="text" id="name" placeholder="Enter your name" />
+            <button type="submit">Set Name</button>
+        </form>
+        <h2>Welcome, <span id="user-name">Guest</span>!</h2>
 
-        <input type="text" id="new-task" placeholder="Add a new task" />
-        <button id="add-task-btn">Add Task</button>
+        <form id="task-form">
+            <input type="text" id="task-name" placeholder="Add a new task" required />
+            <button type="submit">Add Task</button>
+        </form>
 
         <ul id="task-list"></ul>
 
-        <button id="toggle-btn" class="toggle">Show Completed</button>
-        
-        <div class="progress">
-            <div id="progress-bar" class="progress-bar"></div>
+        <div class="task-filter">
+            <button data-filter="all">All</button>
+            <button data-filter="pending">Pending</button>
+            <button data-filter="completed">Completed</button>
         </div>
 
-        <button id="mode-btn">Dark/Light Mode</button>
+        <div class="progress">
+            <div id="progress-fill" class="progress-bar"></div>
+        </div>
+
+        <button id="theme-toggle">Dark/Light Mode</button>
     </div>
 
     <script>
-        const userNameInput = document.getElementById('user-name');
-        const displayName = document.getElementById('display-name');
-        const newTaskInput = document.getElementById('new-task');
-        const addTaskBtn = document.getElementById('add-task-btn');
-        const taskList = document.getElementById('task-list');
-        const toggleBtn = document.getElementById('toggle-btn');
-        const progressBar = document.getElementById('progress-bar');
-        const modeBtn = document.getElementById('mode-btn');
-        let tasks = [];
-        let showCompleted = false;
-        let darkMode = false;
+        document.addEventListener('DOMContentLoaded', () => {
+            const taskList = document.getElementById('task-list');
+            const taskForm = document.getElementById('task-form');
+            const nameForm = document.getElementById('name-form');
+            const progressFill = document.getElementById('progress-fill');
+            const userNameSpan = document.getElementById('user-name');
+            const themeToggleBtn = document.getElementById('theme-toggle');
 
-        userNameInput.addEventListener('input', () => {
-            displayName.textContent = userNameInput.value || 'User';
-        });
+            let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            let darkMode = localStorage.getItem('dark_mode') === '1';
 
-        addTaskBtn.addEventListener('click', () => {
-            const taskText = newTaskInput.value.trim();
-            if (taskText) {
-                tasks.push({ text: taskText, completed: false });
-                newTaskInput.value = '';
-                renderTasks();
-            }
-        });
+            // Set initial username to "Guest"
+            let userName = 'Guest';
+            userNameSpan.textContent = userName;
 
-        function renderTasks() {
-            taskList.innerHTML = '';
-            const filteredTasks = tasks.filter(task => task.completed === showCompleted);
-            filteredTasks.forEach((task, index) => {
-                const li = document.createElement('li');
-                li.className = task.completed ? 'completed' : '';
-                li.innerHTML = `
-                    <span>${task.text}</span>
-                    <button onclick="editTask(${index})">Edit</button>
-                    <button onclick="deleteTask(${index})">Delete</button>
-                    <button onclick="toggleComplete(${index})">
-                        ${task.completed ? 'Undo' : 'Complete'}
-                    </button>
-                `;
-                taskList.appendChild(li);
+            // Handle name form submission
+            nameForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const nameInput = document.getElementById('name').value;
+
+                if (nameInput) {
+                    userName = nameInput;
+                    userNameSpan.textContent = userName; // Update displayed name immediately
+                    document.getElementById('name').value = ''; // Clear input field
+                } else {
+                    userNameSpan.textContent = 'Guest'; // If empty, reset to "Guest"
+                }
             });
-            updateProgressBar();
-        }
 
-        function editTask(index) {
-            const newTaskText = prompt('Edit task:', tasks[index].text);
-            if (newTaskText) {
-                tasks[index].text = newTaskText;
-                renderTasks();
+            // Add Task
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const taskName = document.getElementById('task-name').value;
+                
+
+                tasks.push({ name: taskName, status: 'pending' });
+                updateLocalStorage();
+                renderTasks('all');
+                taskForm.reset(); // Clear form
+            });
+
+            // Filter Tasks
+            document.querySelectorAll('.task-filter button').forEach(button => {
+                button.addEventListener('click', () => {
+                    renderTasks(button.dataset.filter);
+                });
+            });
+
+            // Toggle Dark Mode
+            themeToggleBtn.addEventListener('click', () => {
+                darkMode = !darkMode;
+                document.body.classList.toggle('dark-mode', darkMode);
+                localStorage.setItem('dark_mode', darkMode ? '1' : '0');
+            });
+
+            // Render Tasks
+            function renderTasks(filter = 'all') {
+                taskList.innerHTML = '';
+
+                tasks.forEach((task, index) => {
+                    if (filter === 'all' || task.status === filter) {
+                        const taskItem = document.createElement('li');
+                        taskItem.innerHTML = `
+                            <div>
+                                <span>${task.name}</span>
+                            </div>
+                            <div class="task-actions">
+                                <button onclick="editTask(${index})">Edit</button>
+                                ${task.status === 'pending' ? 
+                                `<button onclick="markComplete(${index})">Complete</button>` : 
+                                `<button onclick="markPending(${index})">Pending</button>`}
+                                <button onclick="deleteTask(${index})">Delete</button>
+                            </div>
+                        `;
+                        taskList.appendChild(taskItem);
+                    }
+                });
+
+                updateProgressBar();
             }
-        }
 
-        function deleteTask(index) {
-            tasks.splice(index, 1);
-            renderTasks();
-        }
+            // Edit Task (for both name and date)
+            window.editTask = function (index) {
+                const newTaskName = prompt("Edit task name:", tasks[index].name);
+                if (newTaskName !== null && newTaskName.trim() !== "") {
+                    tasks[index].name = newTaskName;
+                }
 
-        function toggleComplete(index) {
-            tasks[index].completed = !tasks[index].completed;
-            renderTasks();
-        }
+                
 
-        toggleBtn.addEventListener('click', () => {
-            showCompleted = !showCompleted;
-            toggleBtn.textContent = showCompleted ? 'Show Pending' : 'Show Completed';
-            renderTasks();
+                updateLocalStorage();
+                renderTasks('all');
+            }
+
+            // Mark Task as Complete
+            window.markComplete = function (index) {
+                tasks[index].status = 'completed';
+                updateLocalStorage();
+                renderTasks('all');
+            }
+
+            // Mark Task as Pending
+            window.markPending = function (index) {
+                tasks[index].status = 'pending';
+                updateLocalStorage();
+                renderTasks('all');
+            }
+
+            // Delete Task
+            window.deleteTask = function (index) {
+                tasks.splice(index, 1);
+                updateLocalStorage();
+                renderTasks('all');
+            }
+
+            // Update Local Storage
+            function updateLocalStorage() {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+            }
+
+            // Update Progress Bar
+            function updateProgressBar() {
+                const completedTasks = tasks.filter(task => task.status === 'completed').length;
+                const totalTasks = tasks.length;
+                const completionRate = totalTasks ? (completedTasks / totalTasks) * 100 : 0;
+                progressFill.style.width = completionRate + '%'; // Corrected width assignment
+            }
+
+            // Initial Rendering
+            if (darkMode) {
+                document.body.classList.add('dark-mode');
+            }
+            renderTasks('all');
         });
-
-        function updateProgressBar() {
-            const completedTasks = tasks.filter(task => task.completed).length;
-            const totalTasks = tasks.length;
-            const progress = totalTasks === 0 ? 0 : (completedTasks / totalTasks) * 100;
-            progressBar.style.width = progress + '%';
-        }
-
-        modeBtn.addEventListener('click', () => {
-            darkMode = !darkMode;
-            document.body.classList.toggle('dark-mode', darkMode);
-        });
-
-        renderTasks();
     </script>
 </body>
 </html>
